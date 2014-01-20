@@ -7,7 +7,6 @@ import (
 	"net/rpc"
 	"runtime"
 	"runtime/pprof"
-	"sync/atomic"
 	"time"
 	"os"
 )
@@ -25,7 +24,6 @@ func read(ck *rpc.Client, reqs chan int) {
 		<-sem
 		go func(req int) {
 			ck.Call("Server.Nothing", &struct{}{}, &struct{}{})
-			nops = atomic.AddInt32(&nops, 1)
 			sem <- 1
 		}(req)
 	}
@@ -44,6 +42,7 @@ func main() {
         pprof.StartCPUProfile(f)
     }
 
+	nops = 0
 	sem = make(chan int, *maxOutstanding)
 	for i:=0; i < *maxOutstanding; i++ {
 		sem <- 1
@@ -58,7 +57,6 @@ func main() {
 	done := time.NewTimer(time.Duration(*nsec)*time.Second).C
 	start := time.Now()
 
-	i := 1
 	go read(ck, reqs)
 outer:
 	for {
@@ -67,7 +65,7 @@ outer:
 			break outer
 		default:
 			reqs <- 1
-			i++
+			nops++
 		}
 	}
 	close(reqs)
