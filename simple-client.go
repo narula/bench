@@ -15,15 +15,16 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var nsec = flag.Int("nsec", 2, "Number of seconds; will wait to finish all requests before completing.")
 var maxOutstanding = flag.Int("nmax", 5000, "Max outstanding requests.")
 var cacheServer = flag.String("cs", "localhost:8000", "Caching server host and port.")
+var nc = flag.Int("nc", 10, "Number of rpc.Clients")
 
 var nops int32
 var sem chan int
 
-func read(ck *rpc.Client, reqs chan int) {
+func read(clients []*rpc.Client, reqs chan int) {
 	for req := range reqs {
 		<-sem
 		go func(req int) {
-			ck.Call("Server.Nothing", &struct{}{}, &struct{}{})
+			clients[req % *nc].Call("Server.Nothing", &struct{}{}, &struct{}{})
 			sem <- 1
 		}(req)
 	}
@@ -48,23 +49,27 @@ func main() {
 		sem <- 1
 	}
 
-	ck, err := rpc.Dial("tcp", *cacheServer)
-	if err != nil {
-		log.Fatalf("error: %v\n", err)
+	var err error
+	clients := make([]*rpc.Client, *nc)
+	for i := 0; i < *nc; i++ {
+		clients[i], err = rpc.Dial("tcp", *cacheServer)
+		if err != nil {
+			log.Fatalf("error: %v\n", err)
+		}
 	}
 
 	reqs := make(chan int)
 	done := time.NewTimer(time.Duration(*nsec)*time.Second).C
 	start := time.Now()
 
-	go read(ck, reqs)
+	go read(clients, reqs)
 outer:
 	for {
 		select {
 		case <- done:
 			break outer
 		default:
-			reqs <- 1
+			reqs <- int(nops)  // Don't care just trying to spread out clients
 			nops++
 		}
 	}
