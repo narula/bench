@@ -11,11 +11,13 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"os/signal"
+	"syscall"
 	_ "net/http/pprof"
 )
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write mem profile to file")
+var lockprofile = flag.String("lockprofile", "", "write lock profile to file")
 var port = flag.Int("port", 8000, "port")
 var nprocs = flag.Int("nprocs", 2, "GOMAXPROCS default 2")
 
@@ -60,8 +62,8 @@ func (c *Simple) run() {
 }
 
 func main() {
-	runtime.GOMAXPROCS(*nprocs)
 	flag.Parse()
+	runtime.GOMAXPROCS(*nprocs)
 
     if *cpuprofile != "" {
         f, err := os.Create(*cpuprofile)
@@ -71,10 +73,21 @@ func main() {
         pprof.StartCPUProfile(f)
     }
 
+	if *lockprofile != "" {
+		prof, err := os.Create(*lockprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		runtime.SetBlockProfileRate(1)
+		defer func() {
+			pprof.Lookup("block").WriteTo(prof, 0)
+			prof.Close()
+		}()
+	}
 	s := NewServer(*port)
 
 	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGQUIT)
 	go catchKill(interrupt)
 
 	fmt.Println("Started server")
@@ -89,7 +102,7 @@ func main() {
 
 // Dump profiling information and stats before exiting.
 func catchKill(interrupt chan os.Signal) {
-	<-interrupt
+	x := <-interrupt
 	if *cpuprofile != "" {
 		pprof.StopCPUProfile()
 	}
@@ -100,6 +113,9 @@ func catchKill(interrupt chan os.Signal) {
         }
         pprof.WriteHeapProfile(f)
     }
+	if x == syscall.SIGQUIT {
+		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+	}
 	fmt.Println("Caught signal")
 	os.Exit(0)
 }
