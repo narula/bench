@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 	_ "net/http/pprof"
+	"github.com/ugorji/go/codec"
 )
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
@@ -20,6 +21,13 @@ var memprofile = flag.String("memprofile", "", "write mem profile to file")
 var lockprofile = flag.String("lockprofile", "", "write lock profile to file")
 var port = flag.Int("port", 8000, "port")
 var nprocs = flag.Int("nprocs", 2, "GOMAXPROCS default 2")
+var use_codec = flag.Bool("codec", false, "Use ugorji's codec and msgpack")
+
+// create and configure Handle
+var (
+  bh codec.BincHandle
+  mh codec.MsgpackHandle
+)
 
 type Simple struct {
 	port int
@@ -27,6 +35,11 @@ type Simple struct {
 }
 
 func (s *Simple) Nothing(req, rep *struct{}) error {
+	return nil
+}
+
+func (s *Simple) Echo(req string,  rep *string) error {
+	*rep = req
 	return nil
 }
 
@@ -40,7 +53,13 @@ func (c *Simple) waitForConnections(rpcs *rpc.Server) {
 	for {
 		conn, err := c.listener.Accept()
 		if err == nil {
-			go rpcs.ServeConn(conn)
+			if *use_codec {
+			//rpcCodec := codec.GoRpc.ServerCodec(conn, &mh)
+				rpcCodec := codec.MsgpackSpecRpc.ServerCodec(conn, &mh)
+				go rpcs.ServeCodec(rpcCodec)
+			} else {
+				go rpcs.ServeConn(conn)
+			}
 		} else {
 			// handle error
 			//fmt.Println("ERROR: ", err)
