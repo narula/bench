@@ -1,4 +1,6 @@
 *~
 simple-client
 simple-server
+select_loop
 *.out
+*.svg
