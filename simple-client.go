@@ -6,10 +6,11 @@ import (
 	"log"
 	"net"
 	"net/rpc"
+	"os"
 	"runtime"
 	"runtime/pprof"
 	"time"
-	"os"
+
 	"github.com/ugorji/go/codec"
 )
 
@@ -26,8 +27,8 @@ var sem chan int
 
 // create and configure Handle
 var (
-  bh codec.BincHandle
-  mh codec.MsgpackHandle
+	bh codec.BincHandle
+	mh codec.MsgpackHandle
 )
 
 func read(clients []*rpc.Client, reqs chan int) {
@@ -36,12 +37,12 @@ func read(clients []*rpc.Client, reqs chan int) {
 		go func(req int) {
 			if *exp == "echo" {
 				var x string
-				err := clients[req % *nc].Call("Simple.Echo", "hi", &x)
+				err := clients[req%*nc].Call("Simple.Echo", "hi", &x)
 				if err != nil || x != "hi" {
 					panic(err)
 				}
 			} else {
-				err := clients[req % *nc].Call("Simple.Nothing", &struct{}{}, &struct{}{})
+				err := clients[req%*nc].Call("Simple.Nothing", &struct{}{}, &struct{}{})
 				if err != nil {
 					panic(err)
 				}
@@ -55,18 +56,18 @@ func main() {
 	flag.Parse()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-    if *cpuprofile != "" {
-        f, err := os.Create(*cpuprofile)
-        if err != nil {
-            log.Fatal(err)
-        }
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("Starting...")
-        pprof.StartCPUProfile(f)
-    }
+		pprof.StartCPUProfile(f)
+	}
 
 	nops = 0
 	sem = make(chan int, *maxOutstanding)
-	for i:=0; i < *maxOutstanding; i++ {
+	for i := 0; i < *maxOutstanding; i++ {
 		sem <- 1
 	}
 
@@ -89,22 +90,22 @@ func main() {
 	}
 
 	reqs := make(chan int)
-	done := time.NewTimer(time.Duration(*nsec)*time.Second).C
+	done := time.NewTimer(time.Duration(*nsec) * time.Second).C
 	start := time.Now()
 
 	go read(clients, reqs)
 outer:
 	for {
 		select {
-		case <- done:
+		case <-done:
 			break outer
 		default:
-			reqs <- int(nops)  // Don't care just trying to spread out clients
+			reqs <- int(nops) // Don't care just trying to spread out clients
 			nops++
 		}
 	}
 	close(reqs)
-	for i:=0; i < *maxOutstanding; i++ {
+	for i := 0; i < *maxOutstanding; i++ {
 		<-sem
 	}
 	x := time.Since(start)

@@ -1,18 +1,19 @@
 package main
 
 import (
-	"os"
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"net/rpc"
+	"os"
+	"os/signal"
 	"runtime"
 	"runtime/pprof"
-	"os/signal"
 	"syscall"
-	_ "net/http/pprof"
+
 	"github.com/ugorji/go/codec"
 )
 
@@ -25,12 +26,12 @@ var use_codec = flag.Bool("codec", false, "Use ugorji's codec and msgpack")
 
 // create and configure Handle
 var (
-  bh codec.BincHandle
-  mh codec.MsgpackHandle
+	bh codec.BincHandle
+	mh codec.MsgpackHandle
 )
 
 type Simple struct {
-	port int
+	port     int
 	listener net.Listener
 }
 
@@ -38,7 +39,7 @@ func (s *Simple) Nothing(req, rep *struct{}) error {
 	return nil
 }
 
-func (s *Simple) Echo(req string,  rep *string) error {
+func (s *Simple) Echo(req string, rep *string) error {
 	*rep = req
 	return nil
 }
@@ -54,7 +55,7 @@ func (c *Simple) waitForConnections(rpcs *rpc.Server) {
 		conn, err := c.listener.Accept()
 		if err == nil {
 			if *use_codec {
-			//rpcCodec := codec.GoRpc.ServerCodec(conn, &mh)
+				//rpcCodec := codec.GoRpc.ServerCodec(conn, &mh)
 				rpcCodec := codec.MsgpackSpecRpc.ServerCodec(conn, &mh)
 				go rpcs.ServeCodec(rpcCodec)
 			} else {
@@ -84,13 +85,13 @@ func main() {
 	flag.Parse()
 	runtime.GOMAXPROCS(*nprocs)
 
-    if *cpuprofile != "" {
-        f, err := os.Create(*cpuprofile)
-        if err != nil {
-            log.Fatal(err)
-        }
-        pprof.StartCPUProfile(f)
-    }
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
 
 	if *lockprofile != "" {
 		prof, err := os.Create(*lockprofile)
@@ -126,12 +127,12 @@ func catchKill(interrupt chan os.Signal) {
 		pprof.StopCPUProfile()
 	}
 	if *memprofile != "" {
-        f, err := os.Create(*memprofile)
-        if err != nil {
-            log.Fatal(err)
-        }
-        pprof.WriteHeapProfile(f)
-    }
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+	}
 	if x == syscall.SIGQUIT {
 		pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 	}
