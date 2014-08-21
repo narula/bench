@@ -1,9 +1,9 @@
 package main
 
 import (
-	"ddtxn/prof"
 	"flag"
 	"fmt"
+	"prof"
 	"sync"
 )
 import "time"
